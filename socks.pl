@@ -75,7 +75,6 @@ while () {
             for my $s (@ready) {
                 my $readed = $s->sysread( my $data, 1024 );
                 unless ($readed) {
-                    carp 'connection closed';
                     $socket->close();
                     last CONNECT;
                 }
@@ -123,7 +122,6 @@ while () {
                 for my $s (@ready) {
                     my $readed = $s->sysread( my $data, 1024 );
                     unless ($readed) {
-                        carp 'connection closed';
                         $conn->close();
                         last BIND;
                     }
