@@ -31,8 +31,8 @@ $IO::Socket::Socks::SOCKS5_RESOLVE = 1;
 my $user     = $ENV{'SOCKS_USER'};
 my $password = $ENV{'SOCKS_PASSWORD'};
 
-croak "USER ENV is not specified!"     unless ($user);
-croak "PASSWORD ENV is not specified!" unless ($password);
+croak "SOCKS_USER ENV is not specified!"     unless ($user);
+croak "SOCKS_PASSWORD ENV is not specified!" unless ($password);
 
 my $server = IO::Socker::Socks->new(
     ProxyAddr  => '0.0.0.0',
@@ -153,9 +153,7 @@ while () {
 }
 
 sub auth {
-    my $login    = shift;
-    my $password = shift;
-
-    my %allowed_users = ( root => 123 );
-    return $allowed_users{$login} eq $password;
+    my ($login, $pass) = @_;
+    return 1 if $user eq $login && $password eq $pass;
+    return 0;
 }
