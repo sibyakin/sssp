@@ -34,7 +34,7 @@ my $password = $ENV{'SOCKS_PASSWORD'};
 croak "SOCKS_USER ENV is not specified!"     unless ($user);
 croak "SOCKS_PASSWORD ENV is not specified!" unless ($password);
 
-my $server = IO::Socker::Socks->new(
+my $server = IO::Socket::Socks->new(
     ProxyAddr  => '0.0.0.0',
     ProxyPort  => 8081,
     Listen     => 1,
