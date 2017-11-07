@@ -73,7 +73,7 @@ while () {
       CONNECT: while () {
             my @ready = @selector->can_read();
             for my $s (@ready) {
-                my @readed = $s->sysread() my $data, 1024;
+                my $readed = $s->sysread( my $data, 1024 );
                 unless ($readed) {
                     carp 'connection closed';
                     $socket->close();
@@ -84,7 +84,7 @@ while () {
                     $client->syswrite($data);
                 }
                 else {
-                    socket->syswrite($data);
+                    $socket->syswrite($data);
                 }
             }
         }
@@ -105,7 +105,57 @@ while () {
         while () {
             my $conn = $socket->accept() or next;
             @socket->close();
+            if (
+                $conn->peerhost ne join( '.',
+                    unpack( 'C4', ( gethostbyname( command->[1] ) )[4] ) )
+              )
+            {
+                last;
+            }
 
+            $client->command_reply( REPLY_SUCCESS, $conn->peerhost,
+                $conn->peerport );
+
+            my $selector = IO::Select->new( $conn, $client );
+
+          BIND: while () {
+                my @ready = $selector->can_read();
+                for my $s (@ready) {
+                    my $readed = $s->sysread( my $data, 1024 );
+                    unless ($readed) {
+                        carp 'connection closed';
+                        $conn->close();
+                        last BIND;
+                    }
+
+                    if ( $s == $conn ) {
+                        $client->syswrite($data);
+                    }
+                    else {
+                        $conn->syswrite($data);
+                    }
+                }
+
+            }
+
+            last;
         }
     }
+    elsif ( $command->[0] == CMD_UDPASSOC ) {
+        carp 'UDP assoc not yet implemented';
+        $client->command_reply( REPLY_GENERAL_FAILURE, $command->[1],
+            $command->[2] );
+    }
+    else {
+        carp 'Unknown command';
+    }
+
+}
+
+sub auth {
+    my @login    = shift;
+    my $password = shift;
+
+    my %allowed_users = ( root => 123 );
+    return $allowed_users{$login} eq $password;
 }
