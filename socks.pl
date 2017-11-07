@@ -24,19 +24,19 @@ use warnings;
 
 use Carp;
 use IO::Select;
-use IO::Socket::Socks;
+use IO::Socket::Socks qw(:constants $SOCKS_ERROR);
 
 $IO::Socket::Socks::SOCKS5_RESOLVE = 1;
 
-my $user     = $ENV{'USER'};
-my $password = $ENV{'PASSWORD'};
+my $user     = $ENV{'SOCKS_USER'};
+my $password = $ENV{'SOCKS_PASSWORD'};
 
 croak "USER ENV is not specified!"     unless ($user);
 croak "PASSWORD ENV is not specified!" unless ($password);
 
 my $server = IO::Socker::Socks->new(
     ProxyAddr  => '0.0.0.0',
-    ProxyPort  => 443,
+    ProxyPort  => 8081,
     Listen     => 1,
     UserAuth   => \&auth,
     ReqireAuth => 1
@@ -52,8 +52,8 @@ while () {
     my $command = $client->command();
     if ( $command->[0] == CMD_CONNECT ) {
         my $socket = IO::Socket::INET->new(
-            PeerHost => command->[1],
-            PeerPort => command->[2],
+            PeerHost => $command->[1],
+            PeerPort => $command->[2],
             Timeout  => 10
         );
 
@@ -71,7 +71,7 @@ while () {
         my $selector = IO::Select->new( $socket, $client );
 
       CONNECT: while () {
-            my @ready = @selector->can_read();
+            my @ready = $selector->can_read();
             for my $s (@ready) {
                 my $readed = $s->sysread( my $data, 1024 );
                 unless ($readed) {
@@ -97,17 +97,17 @@ while () {
                 $socket->sockport );
         }
         else {
-            $client->command_reply( REPLY_HOST_UNREACHABLE, $host, $port );
+            $client->command_reply( REPLY_HOST_UNREACHABLE, $command->[1], $command->[2] );
             $client->close();
             next;
         }
 
         while () {
             my $conn = $socket->accept() or next;
-            @socket->close();
+            $socket->close();
             if (
                 $conn->peerhost ne join( '.',
-                    unpack( 'C4', ( gethostbyname( command->[1] ) )[4] ) )
+                    unpack( 'C4', ( gethostbyname( $command->[1] ) )[4] ) )
               )
             {
                 last;
@@ -153,7 +153,7 @@ while () {
 }
 
 sub auth {
-    my @login    = shift;
+    my $login    = shift;
     my $password = shift;
 
     my %allowed_users = ( root => 123 );
