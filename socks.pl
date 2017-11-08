@@ -23,6 +23,7 @@ use 5.022;
 use warnings;
 
 use Carp;
+use threads;
 use IO::Select;
 use IO::Socket::Socks qw(:constants $SOCKS_ERROR);
 
@@ -34,21 +35,14 @@ my $password = $ENV{'SOCKS_PASSWORD'};
 croak "SOCKS_USER ENV is not specified!"     unless ($user);
 croak "SOCKS_PASSWORD ENV is not specified!" unless ($password);
 
-my $server = IO::Socket::Socks->new(
-    ProxyAddr  => '0.0.0.0',
-    ProxyPort  => 8081,
-    Listen     => 1,
-    UserAuth   => \&auth,
-    ReqireAuth => 1
-) or croak $SOCKS_ERROR;
+sub auth {
+    my ( $login, $pass ) = @_;
+    return 1 if $user eq $login && $password eq $pass;
+    return 0;
+}
 
-while () {
-    my $client = $server->accept();
-    unless ($client) {
-        say "ERR: $SOCKS_ERROR";
-        next;
-    }
-
+sub serve {
+    my $client  = shift;
     my $command = $client->command();
     if ( $command->[0] == CMD_CONNECT ) {
         my $socket = IO::Socket::INET->new(
@@ -96,7 +90,8 @@ while () {
                 $socket->sockport );
         }
         else {
-            $client->command_reply( REPLY_HOST_UNREACHABLE, $command->[1], $command->[2] );
+            $client->command_reply( REPLY_HOST_UNREACHABLE, $command->[1],
+                $command->[2] );
             $client->close();
             next;
         }
@@ -148,10 +143,39 @@ while () {
         carp 'Unknown command';
     }
 
+    return;
 }
 
-sub auth {
-    my ($login, $pass) = @_;
-    return 1 if $user eq $login && $password eq $pass;
-    return 0;
+sub main {
+    local $| = 1;
+
+    my $server = IO::Socket::Socks->new(
+        ProxyAddr  => '0.0.0.0',
+        ProxyPort  => 8081,
+        Listen     => 1,
+        UserAuth   => \&auth,
+        ReqireAuth => 1
+    ) or croak $SOCKS_ERROR;
+
+    while () {
+        my $client = $server->accept();
+        unless ($client) {
+            say "ERR: $SOCKS_ERROR";
+            next;
+        }
+
+        my $pid = fork();
+        croak "Cannot fork!: $!" unless defined($pid);
+        if ( $pid == 0 ) {
+            serve($client);
+            exit(0);
+        }
+        else {
+            next;
+        }
+    }
+
+    return;
 }
+
+main();
