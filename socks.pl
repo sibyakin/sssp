@@ -41,99 +41,114 @@ sub auth {
     return 0;
 }
 
-sub serve {
+sub handle_connect {
     my $client  = shift;
     my $command = $client->command();
-    if ( $command->[0] == CMD_CONNECT ) {
-        my $socket = IO::Socket::INET->new(
-            PeerHost => $command->[1],
-            PeerPort => $command->[2],
-            Timeout  => 10
-        );
+    my $socket  = IO::Socket::INET->new(
+        PeerHost => $command->[1],
+        PeerPort => $command->[2],
+        Timeout  => 10
+    );
 
-        if ($socket) {
-            $client->command_reply( REPLY_SUCCESS, $socket->sockhost,
-                $socket->sockport );
+    if ($socket) {
+        $client->command_reply( REPLY_SUCCESS, $socket->sockhost,
+            $socket->sockport );
+    }
+    else {
+        $client->command_reply( REPLY_HOST_UNREACHABLE, $command->[1],
+            $command->[2] );
+        $client->close;
+        next;
+    }
+
+    my $selector = IO::Select->new( $socket, $client );
+
+  CONNECT: while () {
+        my @ready = $selector->can_read();
+        for my $s (@ready) {
+            my $readed = $s->sysread( my $data, 1024 );
+            unless ($readed) {
+                $socket->close();
+                last CONNECT;
+            }
+
+            if ( $s == $socket ) {
+                $client->syswrite($data);
+            }
+            else {
+                $socket->syswrite($data);
+            }
         }
-        else {
-            $client->command_reply( REPLY_HOST_UNREACHABLE, $command->[1],
-                $command->[2] );
-            $client->close;
-            next;
+    }
+
+    return;
+}
+
+sub handle_bind {
+    my $client  = shift;
+    my $command = $client->command();
+    my $socket  = IO::Socket::INET->new( Listen => 10 );
+
+    if ($socket) {
+        $client->command_reply( REPLY_SUCCESS, $socket->sockhost,
+            $socket->sockport );
+    }
+    else {
+        $client->command_reply( REPLY_HOST_UNREACHABLE, $command->[1],
+            $command->[2] );
+        $client->close();
+        next;
+    }
+
+    while () {
+        my $conn = $socket->accept() or next;
+        $socket->close();
+        if ( $conn->peerhost ne
+            join( '.', unpack( 'C4', ( gethostbyname( $command->[1] ) )[4] ) ) )
+        {
+            last;
         }
 
-        my $selector = IO::Select->new( $socket, $client );
+        $client->command_reply( REPLY_SUCCESS, $conn->peerhost,
+            $conn->peerport );
 
-      CONNECT: while () {
+        my $selector = IO::Select->new( $conn, $client );
+
+      BIND: while () {
             my @ready = $selector->can_read();
             for my $s (@ready) {
                 my $readed = $s->sysread( my $data, 1024 );
                 unless ($readed) {
-                    $socket->close();
-                    last CONNECT;
+                    $conn->close();
+                    last BIND;
                 }
 
-                if ( $s == $socket ) {
+                if ( $s == $conn ) {
                     $client->syswrite($data);
                 }
                 else {
-                    $socket->syswrite($data);
+                    $conn->syswrite($data);
                 }
             }
+
         }
+
+        last;
+    }
+
+    return;
+}
+
+sub serve {
+    my $client  = shift;
+    my $command = $client->command();
+    if ( $command->[0] == CMD_CONNECT ) {
+        handle_connect($client);
     }
     elsif ( $command->[0] == CMD_BIND ) {
-        my $socket = IO::Socket::INET->new( Listen => 10 );
-
-        if ($socket) {
-            $client->command_reply( REPLY_SUCCESS, $socket->sockhost,
-                $socket->sockport );
-        }
-        else {
-            $client->command_reply( REPLY_HOST_UNREACHABLE, $command->[1],
-                $command->[2] );
-            $client->close();
-            next;
-        }
-
-        while () {
-            my $conn = $socket->accept() or next;
-            $socket->close();
-            if (
-                $conn->peerhost ne join( '.',
-                    unpack( 'C4', ( gethostbyname( $command->[1] ) )[4] ) )
-              )
-            {
-                last;
-            }
-
-            $client->command_reply( REPLY_SUCCESS, $conn->peerhost,
-                $conn->peerport );
-
-            my $selector = IO::Select->new( $conn, $client );
-
-          BIND: while () {
-                my @ready = $selector->can_read();
-                for my $s (@ready) {
-                    my $readed = $s->sysread( my $data, 1024 );
-                    unless ($readed) {
-                        $conn->close();
-                        last BIND;
-                    }
-
-                    if ( $s == $conn ) {
-                        $client->syswrite($data);
-                    }
-                    else {
-                        $conn->syswrite($data);
-                    }
-                }
-
-            }
-
-            last;
-        }
+        handle_bind($client);
     }
+
     elsif ( $command->[0] == CMD_UDPASSOC ) {
         carp 'UDP assoc not yet implemented';
         $client->command_reply( REPLY_GENERAL_FAILURE, $command->[1],
