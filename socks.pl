@@ -35,7 +35,7 @@ my $password = $ENV{'SOCKS_PASSWORD'};
 croak "SOCKS_USER ENV is not specified!"     unless ($user);
 croak "SOCKS_PASSWORD ENV is not specified!" unless ($password);
 
-sub auth {
+sub handle_auth {
     my ( $login, $pass ) = @_;
     return 1 if $user eq $login && $password eq $pass;
     return 0;
@@ -63,7 +63,7 @@ sub handle_connect {
 
     my $selector = IO::Select->new( $socket, $client );
 
-  CONNECT: while () {
+    CONNECT: while () {
         my @ready = $selector->can_read();
         for my $s (@ready) {
             my $readed = $s->sysread( my $data, 1024 );
@@ -114,7 +114,7 @@ sub handle_bind {
 
         my $selector = IO::Select->new( $conn, $client );
 
-      BIND: while () {
+        BIND: while () {
             my @ready = $selector->can_read();
             for my $s (@ready) {
                 my $readed = $s->sysread( my $data, 1024 );
@@ -139,28 +139,6 @@ sub handle_bind {
     return;
 }
 
-sub serve {
-    my $client  = shift;
-    my $command = $client->command();
-    if ( $command->[0] == CMD_CONNECT ) {
-        handle_connect($client);
-    }
-    elsif ( $command->[0] == CMD_BIND ) {
-        handle_bind($client);
-    }
-
-    elsif ( $command->[0] == CMD_UDPASSOC ) {
-        carp 'UDP assoc not yet implemented';
-        $client->command_reply( REPLY_GENERAL_FAILURE, $command->[1],
-            $command->[2] );
-    }
-    else {
-        carp 'Unknown command';
-    }
-
-    return;
-}
-
 sub main {
     local $| = 1;
     local $SIG{CHLD} = 'IGNORE';
@@ -169,7 +147,7 @@ sub main {
         ProxyAddr  => '0.0.0.0',
         ProxyPort  => 8081,
         Listen     => 1,
-        UserAuth   => \&auth,
+        UserAuth   => \&handle_auth,
         ReqireAuth => 1
     ) or croak $SOCKS_ERROR;
 
@@ -183,11 +161,24 @@ sub main {
         my $pid = fork();
         croak "Cannot fork!: $!" unless defined($pid);
         if ( $pid == 0 ) {
-            serve($client);
+            my $command = $client->command();
+            if ( $command->[0] == CMD_CONNECT ) {
+                handle_connect($client);
+            }
+            elsif ( $command->[0] == CMD_BIND ) {
+                handle_bind($client);
+            }
+
+            elsif ( $command->[0] == CMD_UDPASSOC ) {
+                carp 'UDP assoc not yet implemented';
+                $client->command_reply( REPLY_GENERAL_FAILURE, $command->[1],
+                    $command->[2] );
+            }
+            else {
+                carp 'Unknown command';
+            }
+
             exit(0);
-        }
-        else {
-            next;
         }
     }
 
