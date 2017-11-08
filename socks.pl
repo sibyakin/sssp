@@ -23,7 +23,6 @@ use 5.022;
 use warnings;
 
 use Carp;
-use threads;
 use IO::Select;
 use IO::Socket::Socks qw(:constants $SOCKS_ERROR);
 
