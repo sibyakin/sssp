@@ -148,6 +148,7 @@ sub serve {
 
 sub main {
     local $| = 1;
+    local $SIG{CHLD} = 'IGNORE';
 
     my $server = IO::Socket::Socks->new(
         ProxyAddr  => '0.0.0.0',
