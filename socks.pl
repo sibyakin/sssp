@@ -35,9 +35,9 @@ croak "SOCKS_USER ENV is not specified!"     unless ($user);
 croak "SOCKS_PASSWORD ENV is not specified!" unless ($password);
 
 sub handle_auth {
-    my ( $login, $pass ) = @_;
-    return 1 if $user eq $login && $password eq $pass;
-    return 0;
+    #my ( $login, $pass ) = @_;
+    #return 1 if $user eq $login && $password eq $pass;
+    return;
 }
 
 sub handle_connect {
@@ -65,7 +65,7 @@ sub handle_connect {
     CONNECT: while () {
         my @ready = $selector->can_read();
         for my $s (@ready) {
-            my $readed = $s->sysread( my $data, 1024 );
+            my $readed = $s->sysread( my $data, 4096 );
             unless ($readed) {
                 $socket->close();
                 last CONNECT;
@@ -116,7 +116,7 @@ sub handle_bind {
         BIND: while () {
             my @ready = $selector->can_read();
             for my $s (@ready) {
-                my $readed = $s->sysread( my $data, 1024 );
+                my $readed = $s->sysread( my $data, 4096 );
                 unless ($readed) {
                     $conn->close();
                     last BIND;
